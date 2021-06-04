@@ -6,8 +6,8 @@ import tensorflow as tf
 import numpy as np
 from collections import namedtuple
 
-from module import *
-from utils import *
+from cycle_gan.module import *
+from cycle_gan.utils import *
 
 
 class cyclegan(object):
@@ -139,8 +139,8 @@ class cyclegan(object):
                 print(" [!] Load failed...")
 
         for epoch in range(args.epoch):
-            dataA = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/trainA'))
-            dataB = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/trainB'))
+            dataA = glob('{}/*.*'.format(self.dataset_dir + '/trainA'))
+            dataB = glob('{}/*.*'.format(self.dataset_dir + '/trainB'))
             np.random.shuffle(dataA)
             np.random.shuffle(dataB)
             batch_idxs = min(min(len(dataA), len(dataB)), args.train_size) // self.batch_size
@@ -153,24 +153,31 @@ class cyclegan(object):
                 batch_images = np.array(batch_images).astype(np.float32)
 
                 # Update G network and record fake outputs
-                fake_A, fake_B, _, summary_str = self.sess.run(
-                    [self.fake_A, self.fake_B, self.g_optim, self.g_sum],
-                    feed_dict={self.real_data: batch_images, self.lr: lr})
+                fake_A, fake_B, _, summary_str, ga2b, gb2a = self.sess.run([self.fake_A, self.fake_B, 
+                                                                            self.g_optim, self.g_sum,
+                                                                            self.g_loss_a2b, self.g_loss_b2a],
+                                                                           feed_dict={self.real_data: batch_images, 
+                                                                                      self.lr: lr})
                 self.writer.add_summary(summary_str, counter)
                 [fake_A, fake_B] = self.pool([fake_A, fake_B])
 
                 # Update D network
-                _, summary_str = self.sess.run(
-                    [self.d_optim, self.d_sum],
-                    feed_dict={self.real_data: batch_images,
-                               self.fake_A_sample: fake_A,
-                               self.fake_B_sample: fake_B,
-                               self.lr: lr})
+                _, summary_str, dbr, dbf, dar, daf = self.sess.run([self.d_optim, self.d_sum,
+                                                                    self.db_loss_real, self.db_loss_fake,
+                                                                    self.da_loss_real, self.da_loss_fake],
+                                                                   feed_dict={self.real_data: batch_images,
+                                                                              self.fake_A_sample: fake_A,
+                                                                              self.fake_B_sample: fake_B,
+                                                                              self.lr: lr})
                 self.writer.add_summary(summary_str, counter)
 
                 counter += 1
-                print(("Epoch: [%2d] [%4d/%4d] time: %4.4f" % (
-                    epoch, idx, batch_idxs, time.time() - start_time)))
+                log_mesg = "Epoch: [%2d] [%4d/%4d]" % (epoch, idx, batch_idxs)
+                log_mesg = "%s  [D_A] real %.4f fake %.4f" % (log_mesg, dar, daf)
+                log_mesg = "%s  [D_B] real %.4f fake %.4f" % (log_mesg, dbr, dbf)
+                log_mesg = "%s  [G] A->B %.4f B->A %.4f" % (log_mesg, ga2b, ga2b)
+                log_mesg = "%s  [Time] %.2f" % (log_mesg, time.time()-start_time)
+                print(log_mesg)
 
                 if np.mod(counter, args.print_freq) == 1:
                     self.sample_model(args.sample_dir, epoch, idx)
@@ -205,8 +212,8 @@ class cyclegan(object):
             return False
 
     def sample_model(self, sample_dir, epoch, idx):
-        dataA = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testA'))
-        dataB = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testB'))
+        dataA = glob('{}/*.*'.format(self.dataset_dir + '/testA'))
+        dataB = glob('{}/*.*'.format(self.dataset_dir + '/testB'))
         np.random.shuffle(dataA)
         np.random.shuffle(dataB)
         batch_files = list(zip(dataA[:self.batch_size], dataB[:self.batch_size]))
@@ -227,9 +234,9 @@ class cyclegan(object):
         init_op = tf.global_variables_initializer()
         self.sess.run(init_op)
         if args.which_direction == 'AtoB':
-            sample_files = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testA'))
+            sample_files = glob('{}/*.*'.format(self.dataset_dir + '/testA'))
         elif args.which_direction == 'BtoA':
-            sample_files = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testB'))
+            sample_files = glob('{}/*.*'.format(self.dataset_dir + '/testB'))
         else:
             raise Exception('--which_direction must be AtoB or BtoA')
 

@@ -1,7 +1,7 @@
 from __future__ import division
 import tensorflow as tf
-from ops import *
-from utils import *
+from cycle_gan.ops import *
+from cycle_gan.utils import *
 
 
 def discriminator(image, options, reuse=False, name="discriminator"):
